@@ -1,19 +1,24 @@
 const puppeteer = require('puppeteer')
 const config = require('./config.json')
+const log4js = require("log4js")
 
-async function report (log) {
-	currentTime = new Date();
-	console.log(currentTime.toString().split('G')[0] + ': ' + log)
-}
-async function check_cart (page) {
+const logger = log4js.getLogger("Newegg Shopping Bot")
+logger.level = "trace"
+
+async function check_cart(page) {
 	await page.waitForTimeout(250)
+	const amountElementName = ".summary-content-total"
 	try {
-		await page.waitForSelector('span.amount' , { timeout: 1000 })
-		var element = await page.$('span.amount')
-		var text = await page.evaluate(element => element.textContent, element);
+		await page.waitForSelector(amountElementName, { timeout: 1000 })
+		var amountElement = await page.$(amountElementName)
+		var text = await page.evaluate(element => element.textContent, amountElement)
+		// Check that the Cart total is not zero - indicating that the cart has items
+		if (parseInt(text.split('$')[1]) === 0) {
+			throw new Error("There are no items in the cart")
+		}
 		if (parseInt(text.split('$')[1]) > config.price_limit) {
-			await report("Price exceeds limit, removing from cart")
-			var button = await page.$$('button.btn.btn-mini');
+			logger.error("Price exceeds limit, removing from cart")
+			var button = await page.$$('button.btn.btn-mini')
 			while (true) {
 				try {
 					await button[1].click()
@@ -21,52 +26,56 @@ async function check_cart (page) {
 					break
 				}
 			}
-			return false
+			if (config.over_price_limit_behavior === "stop") {
+				logger.error("Over Price Limit Behavior is 'stop'. Ending Newegg Shopping Bot process")
+				process.exit(0);
+			} else {
+				return false
+			}
 		}
-		await report("Card added to cart, attempting to purchase")
+		logger.info("Item added to cart, attempting to purchase")
 		return true
 	} catch (err) {
-		await report("Card not in stock")
+		logger.error(err.message)
 		await page.waitForTimeout(config.refresh_time * 1000)
 		return false
 	}
 }
 
 
-async function run () {
-	await report("Started")
+async function run() {
+	logger.info("Newegg Shopping Bot Started")
 	const browser = await puppeteer.launch({
-        	headless: false,
-			product: 'firefox',
-        	defaultViewport: { width: 1366, height: 768 }
-    	})
-    const page = await browser.newPage()
-	
-    while (true) {
-		await page.goto('https://secure.newegg.com/NewMyAccount/AccountLogin.aspx?nextpage=https%3a%2f%2fwww.newegg.com%2f' , {waitUntil: 'load' })
+		headless: false,
+		product: 'firefox',
+		defaultViewport: { width: 1366, height: 768 }
+	})
+	const page = await browser.newPage()
+
+	while (true) {
+		await page.goto('https://secure.newegg.com/NewMyAccount/AccountLogin.aspx?nextpage=https%3a%2f%2fwww.newegg.com%2f', { waitUntil: 'load' })
 		if (page.url().includes('signin')) {
 			await page.waitForSelector('button.btn.btn-orange')
 			await page.type('#labeled-input-signEmail', config.email)
 			await page.click('button.btn.btn-orange')
 			await page.waitForTimeout(1500)
 			try {
-				await page.waitForSelector('#labeled-input-signEmail', {timeout: 500})
+				await page.waitForSelector('#labeled-input-signEmail', { timeout: 500 })
 			} catch (err) {
 				try {
-					await page.waitForSelector('#labeled-input-password' , {timeout: 2500})
+					await page.waitForSelector('#labeled-input-password', { timeout: 2500 })
 					await page.waitForSelector('button.btn.btn-orange')
 					await page.type('#labeled-input-password', config.password)
 					await page.click('button.btn.btn-orange')
 					await page.waitForTimeout(1500)
 					try {
-						await page.waitForSelector('#labeled-input-password', {timeout: 500})
-					} catch (err) {
+						await page.waitForSelector('#labeled-input-password', { timeout: 500 })
+					} catch (passwordSelectorErr) {
 						break
 					}
-				} catch (err) {
-					report("Manual authorization code required by Newegg.  This should only happen once.")
-					while (page.url().includes('signin'))
-					{
+				} catch (passwordInputErr) {
+					logger.warn("Manual authorization code required by Newegg.  This should only happen once.")
+					while (page.url().includes('signin')) {
 						await page.waitForTimeout(500)
 					}
 					break
@@ -77,22 +86,19 @@ async function run () {
 		}
 	}
 
-	await report("Logged in")
-	await report("Checking for card")
+	logger.trace("Logged in")
+	logger.info("Checking for Item")
 
-	while (true)
-	{
+	while (true) {
 		try {
 			await page.goto('https://secure.newegg.com/Shopping/AddtoCart.aspx?Submit=ADD&ItemList=' + config.item_number, { waitUntil: 'load' })
-			if (page.url().includes("ShoppingCart")) {
-				var check = await check_cart(page)
-				if (check) {
+			if (page.url().includes("cart")) {
+				if (await check_cart(page)) {
 					break
 				}
 			} else if (page.url().includes("ShoppingItem")) {
 				await page.goto('https://secure.newegg.com/Shopping/ShoppingCart.aspx', { waitUntil: 'load' })
-				var check = await check_cart(page)
-				if (check){
+				if (await check_cart(page)) {
 					break
 				}
 			} else if (page.url().includes("areyouahuman")) {
@@ -102,37 +108,63 @@ async function run () {
 			continue
 		}
 	}
+
+	// Find the "Secure Checkout" button and click it (if it exists)
 	try {
-		await page.goto('javascript:attachDelegateEvent((function(){Biz.GlobalShopping.ShoppingCart.checkOut(\'True\')}))', {timeout: 500})
+		const [button] = await page.$x("//button[contains(., 'Secure Checkout')]")
+		if (button) {
+			logger.info("Starting Secure Checkout")
+			await button.click()
+		}
 	} catch (err) {
+		logger.error("Cannot find the Secure Checkout button")
+		logger.error(err)
 	}
-	
+
+	// Wait for the page
+	await page.waitForTimeout(5000)
+	try {
+		await page.waitForSelector("#btnCreditCard", { timeout: 3000 })
+		await inputCVV(page)
+		await submitOrder(page)
+	} catch (err) {
+		logger.error("Cannot find the Place Order button.")
+		logger.warn("Please make sure that your Newegg account defaults for: shipping address, billing address, and payment method have been set.")
+	}
+
+}
+
+/**
+ * Input the Credit Verification Value (CVV)
+ * @param {*} page The page containing the element
+ */
+async function inputCVV(page) {
 	while (true) {
+		logger.info("Waiting for CVV input element")
 		try {
-			await page.waitForSelector('#cvv2Code' , {timeout: 500})
-			await page.type('#cvv2Code', config.cv2)
+			await page.waitForSelector("[placeholder='CVV2']", { timeout: 3000 })
+			await page.focus("[placeholder='CVV2']", { timeout: 5000 })
+			await page.type("[placeholder='CVV2']", config.cv2)
+			logger.info("CVV data inputted")
 			break
 		} catch (err) {
-		}
-		try {
-			await page.waitForSelector('#creditCardCVV2' , {timeout: 500})
-			await page.type('#creditCardCVV2', config.cv2)
-			break
-		} catch (err) {
+			logger.warn("Cannot find CVV input element")
 		}
 	}
+}
 
-	try {
-		await page.waitForSelector('#term' , {timeout: 5000})	
-		await page.click('#term')
-	} catch (err) {
-	}
+/**
+ * Submit the order
+ * @param {*} page The page containing the order form
+ */
+async function submitOrder(page) {
 
-	if (config.auto_submit == 'true') {
-		await page.click('#SubmitOrder')
+	if (config.auto_submit) {
+		await page.click('#btnCreditCard')
+		logger.info("Completed purchase")
+	} else {
+		logger.warn("Order not submitted because 'auto_submit' is not enabled")
 	}
-	await report("Completed purchase")
-    	//await browser.close()
 }
 
 
