@@ -1,0 +1,25 @@
+{
+  "name": "neweggbot",
+  "version": "1.0.0",
+  "description": "Shopping Bot for NewEgg",
+  "main": "NeweggBot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "do-install": "npm install puppeteer -PUPPETEER_PRODUCT=firefox && npm install",
+    "start": "node neweggbot.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ataraksia/NeweggBot.git"
+  },
+  "author": "Ataraksia",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Ataraksia/NeweggBot/issues"
+  },
+  "homepage": "https://github.com/Ataraksia/NeweggBot#readme",
+  "dependencies": {
+    "log4js": "^6.3.0",
+    "puppeteer": "^5.5.0"
+  }
+}
