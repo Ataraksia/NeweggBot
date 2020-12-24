@@ -6,11 +6,23 @@ async function report (log) {
 	console.log(currentTime.toString().split('G')[0] + ': ' + log)
 }
 async function check_cart (page) {
+	const amountElementName = ".summary-content-total"
+	
 	await page.waitForTimeout(250)
 	try {
-		await page.waitForSelector('span.amount' , { timeout: 1000 })
-		var element = await page.$('span.amount')
-		var text = await page.evaluate(element => element.textContent, element);
+		await page.waitForSelector('button.close' , { timeout: 6000 })
+		var maskCloseButton = await page.$$('button.close')
+		if (maskCloseButton.length > 0) {
+			await maskCloseButton[0].click()
+		}
+
+		await page.waitForSelector(amountElementName, { timeout: 1000 })
+		var amountElement = await page.$(amountElementName)
+		var text = await page.evaluate(element => element.textContent, amountElement)
+		// Check that the Cart total is not zero - indicating that the cart has items
+		if (parseInt(text.split('$')[1]) === 0) {
+			throw new Error("There are no items in the cart")
+		}
 		if (parseInt(text.split('$')[1]) > config.price_limit) {
 			await report("Price exceeds limit, removing from cart")
 			var button = await page.$$('button.btn.btn-mini');
@@ -26,6 +38,7 @@ async function check_cart (page) {
 		await report("Card added to cart, attempting to purchase")
 		return true
 	} catch (err) {
+		await report(err)
 		await report("Card not in stock")
 		await page.waitForTimeout(config.refresh_time * 1000)
 		return false
@@ -36,7 +49,8 @@ async function check_cart (page) {
 async function run () {
 	await report("Started")
 	const browser = await puppeteer.launch({
-        	headless: false,
+			args: ['-wait-for-browser', '--single-process'],
+			headless: false,
 			product: 'firefox',
         	defaultViewport: { width: 1366, height: 768 }
     	})
@@ -84,7 +98,7 @@ async function run () {
 	{
 		try {
 			await page.goto('https://secure.newegg.com/Shopping/AddtoCart.aspx?Submit=ADD&ItemList=' + config.item_number, { waitUntil: 'load' })
-			if (page.url().includes("ShoppingCart")) {
+			if (page.url().includes("Cart")) {
 				var check = await check_cart(page)
 				if (check) {
 					break
@@ -103,14 +117,19 @@ async function run () {
 		}
 	}
 	try {
-		await page.goto('javascript:attachDelegateEvent((function(){Biz.GlobalShopping.ShoppingCart.checkOut(\'True\')}))', {timeout: 500})
+		const [button] = await page.$x("//button[contains(., 'Secure Checkout')]")
+		if (button) {
+			await report("Starting Secure Checkout")
+			await button.click()
+		}
 	} catch (err) {
 	}
 	
 	while (true) {
 		try {
-			await page.waitForSelector('#cvv2Code' , {timeout: 500})
-			await page.type('#cvv2Code', config.cv2)
+			await page.waitForSelector("[placeholder='CVV2']", { timeout: 3000 })
+			await page.focus("[placeholder='CVV2']", { timeout: 5000 })
+			await page.type("[placeholder='CVV2']", config.cv2)
 			break
 		} catch (err) {
 		}
@@ -129,7 +148,7 @@ async function run () {
 	}
 
 	if (config.auto_submit == 'true') {
-		await page.click('#SubmitOrder')
+		await page.click('#btnCreditCard')
 	}
 	await report("Completed purchase")
     	//await browser.close()
