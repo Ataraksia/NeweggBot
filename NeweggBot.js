@@ -38,7 +38,6 @@ async function check_cart (page) {
 		await report("Card added to cart, attempting to purchase")
 		return true
 	} catch (err) {
-		await report(err)
 		await report("Card not in stock")
 		await page.waitForTimeout(config.refresh_time * 1000)
 		return false
@@ -49,8 +48,6 @@ async function check_cart (page) {
 async function run () {
 	await report("Started")
 	const browser = await puppeteer.launch({
-			args: ['-wait-for-browser', '--single-process'],
-			headless: false,
 			product: 'firefox',
         	defaultViewport: { width: 1366, height: 768 }
     	})
