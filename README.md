@@ -5,7 +5,7 @@ This bot is very much still in the early stages, and more than a little rough ar
 
 ## Installation
 You will require [Node.js 14](https://nodejs.org/en/) to run this.
-After installing via git or by downloading the code and extracting it, navigate to the folder where the files are located via powershell(or equivalent console) and run `npm install puppeteer -PUPPETEER_PRODUCT=firefox`.  If you end up experiencing the error `Error: Could not find browser revision latest` when running, you may also need to run the command `PUPPETEER-PRODUCT=firefox npm i puppeteer`.
+After installing via git or by downloading the code and extracting it, navigate to the folder where the files are located via powershell(or equivalent console) and run `npm install puppeteer -PUPPETEER_PRODUCT=firefox`.  If you end up experiencing the error `Error: Could not find browser revision latest` when running, you may also need to run the command `PUPPETEER_PRODUCT=firefox npm i puppeteer`.
 
 ## Configuration
 Once that is finished, create a copy of config_template.json and name it config.json.  Inside you will find the very basic customization options.  
