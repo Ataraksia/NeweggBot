@@ -73,6 +73,7 @@ async function run () {
 					try {
 						await page.waitForSelector('#labeled-input-password', {timeout: 500})
 					} catch (err) {
+						await report(err)
 						break
 					}
 				} catch (err) {
@@ -111,6 +112,7 @@ async function run () {
 				await page.waitForTimeout(1000)
 			}
 		} catch (err) {
+			await report(err)
 			continue
 		}
 	}
@@ -121,6 +123,7 @@ async function run () {
 			await button.click()
 		}
 	} catch (err) {
+		await report(err)
 	}
 	
 	while (true) {
@@ -130,12 +133,14 @@ async function run () {
 			await page.type("[placeholder='CVV2']", config.cv2)
 			break
 		} catch (err) {
+			await report(err)
 		}
 		try {
 			await page.waitForSelector('#creditCardCVV2' , {timeout: 500})
 			await page.type('#creditCardCVV2', config.cv2)
 			break
 		} catch (err) {
+			await report(err)
 		}
 	}
 
@@ -143,6 +148,7 @@ async function run () {
 		await page.waitForSelector('#term' , {timeout: 5000})	
 		await page.click('#term')
 	} catch (err) {
+		await report(err)
 	}
 
 	if (config.auto_submit == 'true') {
