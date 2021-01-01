@@ -49,6 +49,7 @@ async function run () {
 	await report("Started")
 	const browser = await puppeteer.launch({
 			product: 'firefox',
+			headless: false,
         	defaultViewport: { width: 1366, height: 768 }
     	})
     const page = await browser.newPage()
